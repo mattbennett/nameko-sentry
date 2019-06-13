@@ -4,17 +4,14 @@ import re
 from nameko.extensions import DependencyProvider
 from nameko.web.handlers import HttpRequestHandler
 from raven import Client
-from raven.utils.wsgi import get_environ, get_headers
 from raven.transport.eventlet import EventletHTTPTransport
+from raven.utils.wsgi import get_environ, get_headers
 from six.moves.urllib.parse import urlsplit  # pylint: disable=E0401
 from werkzeug.exceptions import ClientDisconnected
 
-USER_TYPE_CONTEXT_KEYS = (
-    re.compile("user|email|session"),
-)
-TAG_TYPE_CONTEXT_KEYS = (
-    re.compile("call_id$"),
-)
+
+USER_TYPE_CONTEXT_KEYS = (re.compile("user|email|session"),)
+TAG_TYPE_CONTEXT_KEYS = (re.compile("call_id$"),)
 
 
 class SentryReporter(DependencyProvider):
@@ -22,22 +19,22 @@ class SentryReporter(DependencyProvider):
     """
 
     def setup(self):
-        sentry_config = self.container.config.get('SENTRY')
+        sentry_config = self.container.config.get("SENTRY")
 
         sentry_config = sentry_config or {}
-        dsn = sentry_config.get('DSN', None)
-        kwargs = sentry_config.get('CLIENT_CONFIG', {})
+        dsn = sentry_config.get("DSN", None)
+        kwargs = sentry_config.get("CLIENT_CONFIG", {})
 
         self.client = Client(dsn, transport=EventletHTTPTransport, **kwargs)
 
         report_expected_exceptions = sentry_config.get(
-            'REPORT_EXPECTED_EXCEPTIONS', True
+            "REPORT_EXPECTED_EXCEPTIONS", True
         )
         user_type_context_keys = sentry_config.get(
-            'USER_TYPE_CONTEXT_KEYS', USER_TYPE_CONTEXT_KEYS
+            "USER_TYPE_CONTEXT_KEYS", USER_TYPE_CONTEXT_KEYS
         )
         tag_type_context_keys = sentry_config.get(
-            'TAG_TYPE_CONTEXT_KEYS', TAG_TYPE_CONTEXT_KEYS
+            "TAG_TYPE_CONTEXT_KEYS", TAG_TYPE_CONTEXT_KEYS
         )
 
         self.report_expected_exceptions = report_expected_exceptions
@@ -46,15 +43,15 @@ class SentryReporter(DependencyProvider):
 
     def format_message(self, worker_ctx, exc_info):
         exc_type, exc, _ = exc_info
-        return (
-            'Unhandled exception in call {}: '
-            '{} {!r}'.format(worker_ctx.call_id, exc_type.__name__, str(exc))
+        return "Unhandled exception in call {}: " "{} {!r}".format(
+            worker_ctx.call_id, exc_type.__name__, str(exc)
         )
 
     def is_expected_exception(self, worker_ctx, exc_info):
         _, exc, _ = exc_info
         expected_exceptions = getattr(
-            worker_ctx.entrypoint, 'expected_exceptions', tuple())
+            worker_ctx.entrypoint, "expected_exceptions", tuple()
+        )
         return isinstance(exc, expected_exceptions)
 
     def get_dependency(self, worker_ctx):
@@ -70,7 +67,7 @@ class SentryReporter(DependencyProvider):
             try:
                 request = worker_ctx.args[0]
                 try:
-                    if request.mimetype == 'application/json':
+                    if request.mimetype == "application/json":
                         data = request.data
                     else:
                         data = request.form
@@ -78,17 +75,19 @@ class SentryReporter(DependencyProvider):
                     data = {}
 
                 urlparts = urlsplit(request.url)
-                http.update({
-                    'url': '{}://{}{}'.format(
-                        urlparts.scheme, urlparts.netloc, urlparts.path
-                    ),
-                    'query_string': urlparts.query,
-                    'method': request.method,
-                    'data': data,
-                    'headers': dict(get_headers(request.environ)),
-                    'env': dict(get_environ(request.environ)),
-                })
-            except:
+                http.update(
+                    {
+                        "url": "{}://{}{}".format(
+                            urlparts.scheme, urlparts.netloc, urlparts.path
+                        ),
+                        "query_string": urlparts.query,
+                        "method": request.method,
+                        "data": data,
+                        "headers": dict(get_headers(request.environ)),
+                        "env": dict(get_environ(request.environ)),
+                    }
+                )
+            except Exception:
                 pass  # probably not a compatible entrypoint
 
         self.client.http_context(http)
@@ -112,10 +111,10 @@ class SentryReporter(DependencyProvider):
         """ Merge any tags to include in the sentry payload.
         """
         tags = {
-            'call_id': worker_ctx.call_id,
-            'parent_call_id': worker_ctx.immediate_parent_call_id,
-            'service_name': worker_ctx.container.service_name,
-            'method_name': worker_ctx.entrypoint.method_name
+            "call_id": worker_ctx.call_id,
+            "parent_call_id": worker_ctx.immediate_parent_call_id,
+            "service_name": worker_ctx.container.service_name,
+            "method_name": worker_ctx.entrypoint.method_name,
         }
         for key in worker_ctx.context_data:
             for matcher in self.tag_type_context_keys:
@@ -154,7 +153,7 @@ class SentryReporter(DependencyProvider):
     def capture_exception(self, worker_ctx, exc_info):
         message = self.format_message(worker_ctx, exc_info)
 
-        logger = '{}.{}'.format(
+        logger = "{}.{}".format(
             worker_ctx.service_name, worker_ctx.entrypoint.method_name
         )
 
@@ -165,9 +164,6 @@ class SentryReporter(DependencyProvider):
         else:
             level = logging.ERROR
 
-        data = {
-            'logger': logger,
-            'level': level
-        }
+        data = {"logger": logger, "level": level}
 
         self.client.captureException(exc_info, message=message, data=data)

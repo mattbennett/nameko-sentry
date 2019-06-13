@@ -1,29 +1,27 @@
 #!/usr/bin/env python
 from setuptools import setup
 
+
 setup(
-    name='nameko-sentry',
-    version='1.0.0',
-    description='Nameko extension sends entrypoint exceptions to sentry',
-    author='Matt Bennett',
-    author_email='matt@bennett.name',
-    url='http://github.com/nameko/nameko-sentry',
-    py_modules=['nameko_sentry'],
-    install_requires=[
-        "nameko>=2.5.1",
-        "raven>=3.0.0"
-    ],
+    name="nameko-sentry",
+    version="1.0.0",
+    description="Nameko extension sends entrypoint exceptions to sentry",
+    author="Matt Bennett",
+    author_email="matt@bennett.name",
+    url="http://github.com/nameko/nameko-sentry",
+    py_modules=["nameko_sentry"],
+    install_requires=["nameko>=2.5.1", "raven>=3.0.0"],
     extras_require={
-        'dev': [
+        "dev": [
             "coverage==4.0.3",
-            "flake8==3.3.0",
-            "pylint==1.8.2",
+            "pre-commit==1.16.1",
+            "pylint==2.3.1",
             "pytest==2.8.3",
-            "objgraph==3.1.0"
+            "objgraph==3.1.0",
         ]
     },
     zip_safe=True,
-    license='Apache License, Version 2.0',
+    license="Apache License, Version 2.0",
     classifiers=[
         "Programming Language :: Python",
         "Operating System :: MacOS :: MacOS X",
@@ -36,5 +34,5 @@ setup(
         "Topic :: Internet",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Intended Audience :: Developers",
-    ]
+    ],
 )

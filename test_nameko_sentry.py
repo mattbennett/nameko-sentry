@@ -7,20 +7,19 @@ import eventlet
 import objgraph
 import pytest
 from eventlet.event import Event
-from mock import ANY, Mock, patch, PropertyMock
-from nameko.extensions import DependencyProvider
+from mock import ANY, Mock, PropertyMock, patch
 from nameko.exceptions import RemoteError
+from nameko.extensions import DependencyProvider
 from nameko.rpc import rpc
 from nameko.standalone.rpc import ServiceRpcProxy
-from nameko.testing.services import (
-    entrypoint_hook, entrypoint_waiter, get_extension)
+from nameko.testing.services import entrypoint_hook, entrypoint_waiter, get_extension
 from nameko.web.handlers import HttpRequestHandler, http
-from raven import breadcrumbs, Client
+from raven import Client, breadcrumbs
 from raven.transport.eventlet import EventletHTTPTransport
+from six.moves.urllib import parse
 from werkzeug.exceptions import ClientDisconnected
 
 from nameko_sentry import SentryReporter
-from six.moves.urllib import parse
 
 
 class CustomException(Exception):
@@ -30,20 +29,19 @@ class CustomException(Exception):
 @pytest.fixture
 def config(rabbit_config):
     config = rabbit_config.copy()
-    config.update({
-        'SENTRY': {
-            'DSN': 'http://user:pass@localhost:9000/1',
-            'CLIENT_CONFIG': {
-                'site': 'site name'
+    config.update(
+        {
+            "SENTRY": {
+                "DSN": "http://user:pass@localhost:9000/1",
+                "CLIENT_CONFIG": {"site": "site name"},
             }
         }
-    })
+    )
     return config
 
 
 @pytest.fixture
 def service_cls():
-
     class Service(object):
         name = "service"
 
@@ -62,23 +60,17 @@ def service_cls():
 
 @pytest.yield_fixture
 def patched_sentry():
-    with patch.object(Client, 'send'):
+    with patch.object(Client, "send"):
         yield
 
 
-@pytest.mark.parametrize("dsn", [
-    'http://user:pass@localhost:9000/1',
-    'eventlet+http://user:pass@localhost:9000/1',
-])
-def test_eventlet_transport(
-    dsn, rabbit_config, container_factory, service_cls
-):
+@pytest.mark.parametrize(
+    "dsn",
+    ["http://user:pass@localhost:9000/1", "eventlet+http://user:pass@localhost:9000/1"],
+)
+def test_eventlet_transport(dsn, rabbit_config, container_factory, service_cls):
     config = rabbit_config.copy()
-    config.update({
-        'SENTRY': {
-            'DSN': dsn
-        }
-    })
+    config.update({"SENTRY": {"DSN": dsn}})
 
     container = container_factory(service_cls, config)
     container.start()
@@ -90,7 +82,7 @@ def test_eventlet_transport(
     assert isinstance(transport, EventletHTTPTransport)
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 def test_setup(container_factory, service_cls, config):
 
     container = container_factory(service_cls, config)
@@ -108,10 +100,10 @@ def test_setup(container_factory, service_cls, config):
     assert isinstance(transport, EventletHTTPTransport)
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 def test_setup_without_optional_config(container_factory, service_cls, config):
 
-    del config['SENTRY']['CLIENT_CONFIG']
+    del config["SENTRY"]["CLIENT_CONFIG"]
 
     container = container_factory(service_cls, config)
     container.start()
@@ -127,11 +119,9 @@ def test_setup_without_optional_config(container_factory, service_cls, config):
     assert isinstance(transport, EventletHTTPTransport)
 
 
-@pytest.mark.usefixtures('patched_sentry')
-def test_setup_without_sentry_section_in_config(
-    container_factory, service_cls, config
-):
-    del config['SENTRY']
+@pytest.mark.usefixtures("patched_sentry")
+def test_setup_without_sentry_section_in_config(container_factory, service_cls, config):
+    del config["SENTRY"]
 
     container = container_factory(service_cls, config)
     container.start()
@@ -143,10 +133,10 @@ def test_setup_without_sentry_section_in_config(
     assert not sentry.client.is_enabled()
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 def test_disabled(container_factory, service_cls, config):
 
-    config['SENTRY']['DSN'] = None
+    config["SENTRY"]["DSN"] = None
 
     container = container_factory(service_cls, config)
     container.start()
@@ -158,13 +148,13 @@ def test_disabled(container_factory, service_cls, config):
     assert not sentry.client.is_enabled()
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 def test_worker_result(container_factory, service_cls, config):
     container = container_factory(service_cls, config)
     container.start()
 
-    with entrypoint_hook(container, 'fine') as fine:
-        with entrypoint_waiter(container, 'fine'):
+    with entrypoint_hook(container, "fine") as fine:
+        with entrypoint_waiter(container, "fine"):
             assert fine() == "OK"
 
     sentry = get_extension(container, SentryReporter)
@@ -172,15 +162,12 @@ def test_worker_result(container_factory, service_cls, config):
     assert sentry.client.send.call_count == 0
 
 
-@pytest.mark.usefixtures('patched_sentry', 'predictable_call_ids')
-@pytest.mark.parametrize("exception_cls,expected_level", [
-    (CustomException, logging.WARNING),
-    (KeyError, logging.ERROR)
-])
-def test_worker_exception(
-    exception_cls, expected_level, container_factory, config
-):
-
+@pytest.mark.usefixtures("patched_sentry", "predictable_call_ids")
+@pytest.mark.parametrize(
+    "exception_cls,expected_level",
+    [(CustomException, logging.WARNING), (KeyError, logging.ERROR)],
+)
+def test_worker_exception(exception_cls, expected_level, container_factory, config):
     class Service(object):
         name = "service"
 
@@ -193,8 +180,8 @@ def test_worker_exception(
     container = container_factory(Service, config)
     container.start()
 
-    with entrypoint_waiter(container, 'broken') as result:
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+    with entrypoint_waiter(container, "broken") as result:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -208,27 +195,25 @@ def test_worker_exception(
     # generate expected call args
     expected_logger = "service.broken"
     expected_message = "Unhandled exception in call {}: {} {!r}".format(
-        'service.broken.1', exception_cls.__name__, str(raised.value)
+        "service.broken.1", exception_cls.__name__, str(raised.value)
     )
 
     _, kwargs = sentry.client.send.call_args
-    assert kwargs['message'] == expected_message
-    assert kwargs['logger'] == expected_logger
-    assert kwargs['level'] == expected_level
-    assert kwargs['extra'] == ANY
-    assert kwargs['tags'] == ANY
-    assert kwargs['user'] == {}
+    assert kwargs["message"] == expected_message
+    assert kwargs["logger"] == expected_logger
+    assert kwargs["level"] == expected_level
+    assert kwargs["extra"] == ANY
+    assert kwargs["tags"] == ANY
+    assert kwargs["user"] == {}
 
 
-@pytest.mark.usefixtures('patched_sentry')
-@pytest.mark.parametrize("exception_cls,expected_count", [
-    (CustomException, 0),
-    (KeyError, 1)
-])
+@pytest.mark.usefixtures("patched_sentry")
+@pytest.mark.parametrize(
+    "exception_cls,expected_count", [(CustomException, 0), (KeyError, 1)]
+)
 def test_expected_exception_not_reported(
     exception_cls, expected_count, container_factory, config
 ):
-
     class Service(object):
         name = "service"
 
@@ -238,13 +223,13 @@ def test_expected_exception_not_reported(
         def broken(self):
             raise exception_cls("Error!")
 
-    config['SENTRY']['REPORT_EXPECTED_EXCEPTIONS'] = False
+    config["SENTRY"]["REPORT_EXPECTED_EXCEPTIONS"] = False
 
     container = container_factory(Service, config)
     container.start()
 
-    with entrypoint_waiter(container, 'broken') as result:
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+    with entrypoint_waiter(container, "broken") as result:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -256,31 +241,26 @@ def test_expected_exception_not_reported(
     assert sentry.client.send.call_count == expected_count
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestUserContext(object):
-
     def test_user_defaults(self, container_factory, service_cls, config):
 
         user_data = {
-            'user': 'matt',
-            'username': 'matt',
-            'user_id': 1,
-            'email': 'matt@example.com',
-            'email_address': 'matt@example.com',
-            'session_id': 1
+            "user": "matt",
+            "username": "matt",
+            "user_id": 1,
+            "email": "matt@example.com",
+            "email_address": "matt@example.com",
+            "session_id": 1,
         }
 
         container = container_factory(service_cls, config)
         container.start()
 
-        context_data = {
-            'language': 'en-gb'
-        }
+        context_data = {"language": "en-gb"}
         context_data.update(user_data)
 
-        with ServiceRpcProxy(
-            'service', config, context_data=context_data
-        ) as rpc_proxy:
+        with ServiceRpcProxy("service", config, context_data=context_data) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -289,35 +269,30 @@ class TestUserContext(object):
         assert sentry.client.send.call_count == 1
 
         _, kwargs = sentry.client.send.call_args
-        assert kwargs['user'] == user_data
+        assert kwargs["user"] == user_data
 
     def test_user_custom(self, container_factory, service_cls, config):
 
-        config['SENTRY']['USER_TYPE_CONTEXT_KEYS'] = (
-            'user|email',  # excludes session
-            'other_pattern'
+        config["SENTRY"]["USER_TYPE_CONTEXT_KEYS"] = (
+            "user|email",  # excludes session
+            "other_pattern",
         )
 
         container = container_factory(service_cls, config)
         container.start()
 
         user_data = {
-            'user': 'matt',
-            'username': 'matt',
-            'user_id': 1,
-            'email': 'matt@example.com',
-            'email_address': 'matt@example.com',
+            "user": "matt",
+            "username": "matt",
+            "user_id": 1,
+            "email": "matt@example.com",
+            "email_address": "matt@example.com",
         }
 
-        context_data = {
-            'session_id': 1,  # excluded from user data
-            'language': 'en-gb'
-        }
+        context_data = {"session_id": 1, "language": "en-gb"}  # excluded from user data
         context_data.update(user_data)
 
-        with ServiceRpcProxy(
-            'service', config, context_data=context_data
-        ) as rpc_proxy:
+        with ServiceRpcProxy("service", config, context_data=context_data) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -326,26 +301,21 @@ class TestUserContext(object):
         assert sentry.client.send.call_count == 1
 
         _, kwargs = sentry.client.send.call_args
-        assert kwargs['user'] == user_data
-        assert "session_id" not in kwargs['user']
+        assert kwargs["user"] == user_data
+        assert "session_id" not in kwargs["user"]
 
 
-@pytest.mark.usefixtures('predictable_call_ids')
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("predictable_call_ids")
+@pytest.mark.usefixtures("patched_sentry")
 class TestExtraContext(object):
-
     def test_extra(self, container_factory, service_cls, config):
 
         container = container_factory(service_cls, config)
         container.start()
 
-        context_data = {
-            'language': 'en-gb'
-        }
+        context_data = {"language": "en-gb"}
 
-        with ServiceRpcProxy(
-            'service', config, context_data=context_data
-        ) as rpc_proxy:
+        with ServiceRpcProxy("service", config, context_data=context_data) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -354,27 +324,27 @@ class TestExtraContext(object):
         assert sentry.client.send.call_count == 1
 
         expected_extra = {
-            'call_id_stack': (
-                repr(u"standalone_rpc_proxy.call.0"), repr(u"service.broken.1")
+            "call_id_stack": (
+                repr(u"standalone_rpc_proxy.call.0"),
+                repr(u"service.broken.1"),
             ),
-            'language': repr(u"en-gb"),
-            'sys.argv': ANY
+            "language": repr(u"en-gb"),
+            "sys.argv": ANY,
         }
 
         _, kwargs = sentry.client.send.call_args
-        assert kwargs['extra'] == expected_extra
+        assert kwargs["extra"] == expected_extra
 
 
-@pytest.mark.usefixtures('predictable_call_ids')
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("predictable_call_ids")
+@pytest.mark.usefixtures("patched_sentry")
 class TestTagContext(object):
-
     def test_tags_defaults(self, container_factory, service_cls, config):
 
         container = container_factory(service_cls, config)
         container.start()
 
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -383,35 +353,30 @@ class TestTagContext(object):
         assert sentry.client.send.call_count == 1
 
         expected_tags = {
-            'site': config['SENTRY']['CLIENT_CONFIG']['site'],
-            'call_id': 'service.broken.1',
-            'parent_call_id': 'standalone_rpc_proxy.call.0',
-            'service_name': 'service',
-            'method_name': 'broken'
+            "site": config["SENTRY"]["CLIENT_CONFIG"]["site"],
+            "call_id": "service.broken.1",
+            "parent_call_id": "standalone_rpc_proxy.call.0",
+            "service_name": "service",
+            "method_name": "broken",
         }
 
         _, kwargs = sentry.client.send.call_args
-        assert expected_tags == kwargs['tags']
+        assert expected_tags == kwargs["tags"]
 
     def test_tags_custom(self, container_factory, service_cls, config):
 
-        config['SENTRY']['TAG_TYPE_CONTEXT_KEYS'] = (
-            'session',
-            'other_pattern'
-        )
+        config["SENTRY"]["TAG_TYPE_CONTEXT_KEYS"] = ("session", "other_pattern")
 
         container = container_factory(service_cls, config)
         container.start()
 
         context_data = {
-            'call_id_stack': ["standalone_rpc_proxy.call.0"],
-            'session_id': 1,
-            'email_address': 'matt@example.com',
+            "call_id_stack": ["standalone_rpc_proxy.call.0"],
+            "session_id": 1,
+            "email_address": "matt@example.com",
         }
 
-        with ServiceRpcProxy(
-            'service', config, context_data=context_data
-        ) as rpc_proxy:
+        with ServiceRpcProxy("service", config, context_data=context_data) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken()
 
@@ -420,43 +385,40 @@ class TestTagContext(object):
         assert sentry.client.send.call_count == 1
 
         expected_tags = {
-            'site': config['SENTRY']['CLIENT_CONFIG']['site'],
-            'call_id': 'service.broken.1',
-            'parent_call_id': 'standalone_rpc_proxy.call.0',
-            'service_name': 'service',
-            'method_name': 'broken',
-            'session_id': '1',  # extra
+            "site": config["SENTRY"]["CLIENT_CONFIG"]["site"],
+            "call_id": "service.broken.1",
+            "parent_call_id": "standalone_rpc_proxy.call.0",
+            "service_name": "service",
+            "method_name": "broken",
+            "session_id": "1",  # extra
         }
 
         _, kwargs = sentry.client.send.call_args
-        assert expected_tags == kwargs['tags']
+        assert expected_tags == kwargs["tags"]
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestHttpContext(object):
-
     @pytest.fixture
     def config(self, config, web_config):
         config.update(web_config)
         return config
 
-    def test_normal_http_entrypoint(
-        self, container_factory, config, web_session
-    ):
+    def test_normal_http_entrypoint(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('GET', '/resource')
+            @http("GET", "/resource")
             def resource(self, request):
                 raise CustomException()
 
         container = container_factory(Service, config)
         container.start()
 
-        with entrypoint_waiter(container, 'resource'):
-            web_session.get('/resource')
+        with entrypoint_waiter(container, "resource"):
+            web_session.get("/resource")
 
         sentry = get_extension(container, SentryReporter)
 
@@ -464,35 +426,31 @@ class TestHttpContext(object):
         _, kwargs = sentry.client.send.call_args
 
         expected_http = {
-            'url': ANY,
-            'query_string': "",
-            'method': 'GET',
-            'data': {},
-            'headers': ANY,
-            'env': ANY
+            "url": ANY,
+            "query_string": "",
+            "method": "GET",
+            "data": {},
+            "headers": ANY,
+            "env": ANY,
         }
-        assert kwargs['request'] == expected_http
+        assert kwargs["request"] == expected_http
 
-    def test_json_payload(
-        self, container_factory, config, web_session
-    ):
+    def test_json_payload(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('POST', '/resource')
+            @http("POST", "/resource")
             def resource(self, request):
                 raise CustomException()
 
         container = container_factory(Service, config)
         container.start()
 
-        submitted_data = {
-            'foo': 'bar'
-        }
-        with entrypoint_waiter(container, 'resource'):
-            rv = web_session.post('/resource', json=submitted_data)
+        submitted_data = {"foo": "bar"}
+        with entrypoint_waiter(container, "resource"):
+            rv = web_session.post("/resource", json=submitted_data)
             assert rv.status_code == 500
             assert "CustomException" in rv.text
 
@@ -501,46 +459,40 @@ class TestHttpContext(object):
         assert sentry.client.send.call_count == 1
         _, kwargs = sentry.client.send.call_args
 
-        received_data = kwargs['request']['data']
-        assert received_data == json.dumps(submitted_data).encode('utf-8')
+        received_data = kwargs["request"]["data"]
+        assert received_data == json.dumps(submitted_data).encode("utf-8")
 
-    def test_form_submission(
-        self, container_factory, config, web_session
-    ):
+    def test_form_submission(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('POST', '/resource')
+            @http("POST", "/resource")
             def resource(self, request):
                 raise CustomException()
 
         container = container_factory(Service, config)
         container.start()
 
-        submitted_data = {
-            'foo': 'bar'
-        }
-        with entrypoint_waiter(container, 'resource'):
-            web_session.post('/resource', data=submitted_data)
+        submitted_data = {"foo": "bar"}
+        with entrypoint_waiter(container, "resource"):
+            web_session.post("/resource", data=submitted_data)
 
         sentry = get_extension(container, SentryReporter)
 
         assert sentry.client.send.call_count == 1
         _, kwargs = sentry.client.send.call_args
 
-        assert kwargs['request']['data'] == submitted_data
+        assert kwargs["request"]["data"] == submitted_data
 
-    def test_client_disconnect(
-        self, container_factory, config, web_session
-    ):
+    def test_client_disconnect(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('POST', '/resource')
+            @http("POST", "/resource")
             def resource(self, request):
                 raise CustomException()
 
@@ -550,12 +502,12 @@ class TestHttpContext(object):
         request = Mock(
             method="GET",
             url="http://example.com",
-            mimetype='application/json',
-            environ={}
+            mimetype="application/json",
+            environ={},
         )
         type(request).data = PropertyMock(side_effect=ClientDisconnected)
 
-        with entrypoint_hook(container, 'resource') as hook:
+        with entrypoint_hook(container, "resource") as hook:
             with pytest.raises(CustomException):
                 hook(request)
 
@@ -564,15 +516,12 @@ class TestHttpContext(object):
         assert sentry.client.send.call_count == 1
         _, kwargs = sentry.client.send.call_args
 
-        assert kwargs['request']['data'] == {}
+        assert kwargs["request"]["data"] == {}
 
-    def test_unsupported_http_entrypoint(
-        self, container_factory, config, web_session
-    ):
+    def test_unsupported_http_entrypoint(self, container_factory, config, web_session):
         bogus = object()
 
         class CustomHttpEntrypoint(HttpRequestHandler):
-
             def get_entrypoint_parameters(self, request):
                 args = (bogus, request)
                 kwargs = request.path_values
@@ -585,15 +534,15 @@ class TestHttpContext(object):
 
             sentry = SentryReporter()
 
-            @custom_http('GET', '/resource')
+            @custom_http("GET", "/resource")
             def resource(self, bogus_arg, request):
                 raise CustomException()
 
         container = container_factory(Service, config)
         container.start()
 
-        with entrypoint_waiter(container, 'resource'):
-            web_session.get('/resource')
+        with entrypoint_waiter(container, "resource"):
+            web_session.get("/resource")
 
         sentry = get_extension(container, SentryReporter)
 
@@ -601,16 +550,17 @@ class TestHttpContext(object):
         _, kwargs = sentry.client.send.call_args
 
         expected_http = {}
-        assert kwargs['request'] == expected_http
+        assert kwargs["request"] == expected_http
 
 
-@patch.object(EventletHTTPTransport, '_send_payload')
+@patch.object(EventletHTTPTransport, "_send_payload")
 def test_raven_transport_does_not_affect_container(
     send_mock, container_factory, service_cls, config
 ):
     """ Allowing raven to use the eventlet transport should not affect the
     nameko container, even if raven blocks trying to make calls.
     """
+
     def block(*args):
         Event().wait()
 
@@ -619,32 +569,28 @@ def test_raven_transport_does_not_affect_container(
     container = container_factory(service_cls, config)
     container.start()
 
-    with entrypoint_hook(container, 'broken') as broken:
-        with entrypoint_waiter(container, 'broken'):
+    with entrypoint_hook(container, "broken") as broken:
+        with entrypoint_waiter(container, "broken"):
             with pytest.raises(CustomException):
                 broken()
 
     container.stop()
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestConcurrency(object):
-
     @pytest.fixture
     def config(self, config, web_config):
         config.update(web_config)
         return config
 
-    def test_concurrent_workers(
-        self, container_factory, config, web_session
-    ):
-
+    def test_concurrent_workers(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('GET', '/resource')
+            @http("GET", "/resource")
             def resource(self, request):
                 raise CustomException()
 
@@ -657,26 +603,24 @@ class TestConcurrency(object):
             called()
             return called.call_count == 2
 
-        with entrypoint_waiter(container, 'resource', callback=called_twice):
-            eventlet.spawn(web_session.get, '/resource?q1')
-            eventlet.spawn(web_session.get, '/resource?q2')
+        with entrypoint_waiter(container, "resource", callback=called_twice):
+            eventlet.spawn(web_session.get, "/resource?q1")
+            eventlet.spawn(web_session.get, "/resource?q2")
 
         sentry = get_extension(container, SentryReporter)
 
         assert sentry.client.send.call_count == 2
         query_strings = {
-            kwargs['request']['query_string']
+            kwargs["request"]["query_string"]
             for (_, kwargs) in sentry.client.send.call_args_list
         }
         assert query_strings == {"q1", "q2"}
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestWorkerUsage(object):
-
     @pytest.fixture
     def service_cls(self):
-
         class Service(object):
             name = "service"
 
@@ -684,9 +628,7 @@ class TestWorkerUsage(object):
 
             @rpc
             def broken(self, data):
-                self.sentry.context.merge({
-                    "arbitrary": data
-                })
+                self.sentry.context.merge({"arbitrary": data})
                 raise CustomException("Error!")
 
             @rpc
@@ -700,19 +642,13 @@ class TestWorkerUsage(object):
         container = container_factory(service_cls, config)
         container.start()
 
-        user_data = {
-            'user': 'matt'
-        }
-        context_data = {
-            'language': 'en-gb'
-        }
+        user_data = {"user": "matt"}
+        context_data = {"language": "en-gb"}
         context_data.update(user_data)
 
-        data = {'foo': 'bar'}
+        data = {"foo": "bar"}
 
-        with ServiceRpcProxy(
-            'service', config, context_data=context_data
-        ) as rpc_proxy:
+        with ServiceRpcProxy("service", config, context_data=context_data) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.broken(data)
 
@@ -721,24 +657,23 @@ class TestWorkerUsage(object):
         assert sentry.client.send.call_count == 1
 
         _, kwargs = sentry.client.send.call_args
-        assert kwargs['user'] == user_data
-        assert kwargs['arbitrary'] == data
+        assert kwargs["user"] == user_data
+        assert kwargs["arbitrary"] == data
 
     def test_access_client(self, container_factory, service_cls, config):
 
         container = container_factory(service_cls, config)
         container.start()
 
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             res = rpc_proxy.get_dsn()
 
         sentry = get_extension(container, SentryReporter)
         assert res == sentry.client.get_public_dsn()
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestBreadcrumbs(object):
-
     @pytest.fixture
     def config(self, config, web_config):
         config.update(web_config)
@@ -746,7 +681,6 @@ class TestBreadcrumbs(object):
 
     @pytest.fixture
     def service_cls(self):
-
         class Service(object):
             name = "service"
 
@@ -756,9 +690,9 @@ class TestBreadcrumbs(object):
             def record_with_helper(self, data):
                 breadcrumbs.record(
                     category="worker",
-                    message='breadcrumb message',
-                    level='warning',
-                    data=data
+                    message="breadcrumb message",
+                    level="warning",
+                    data=data,
                 )
                 raise CustomException("Error!")
 
@@ -766,9 +700,9 @@ class TestBreadcrumbs(object):
             def record_directly(self, data):
                 self.sentry.captureBreadcrumb(
                     category="worker",
-                    message='breadcrumb message',
-                    level='warning',
-                    data=data
+                    message="breadcrumb message",
+                    level="warning",
+                    data=data,
                 )
                 raise CustomException("Error!")
 
@@ -783,17 +717,15 @@ class TestBreadcrumbs(object):
 
         return Service
 
-    @pytest.mark.parametrize(
-        "method", ["record_directly", "record_with_helper"]
-    )
+    @pytest.mark.parametrize("method", ["record_directly", "record_with_helper"])
     def test_breadcrumbs(self, method, container_factory, service_cls, config):
 
         container = container_factory(service_cls, config)
         container.start()
 
-        data = {'foo': 'bar'}
+        data = {"foo": "bar"}
 
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             with pytest.raises(RemoteError):
                 getattr(rpc_proxy, method)(data)
 
@@ -803,25 +735,28 @@ class TestBreadcrumbs(object):
 
         _, kwargs = sentry.client.send.call_args
         breadcrumbs = [
-            crumb for crumb in kwargs['breadcrumbs']['values']
-            if crumb['category'] == "worker"
+            crumb
+            for crumb in kwargs["breadcrumbs"]["values"]
+            if crumb["category"] == "worker"
         ]
 
-        assert breadcrumbs == [{
-            'category': 'worker',
-            'data': data,
-            'level': 'warning',
-            'message': 'breadcrumb message',
-            'timestamp': ANY,
-            'type': 'default'
-        }]
+        assert breadcrumbs == [
+            {
+                "category": "worker",
+                "data": data,
+                "level": "warning",
+                "message": "breadcrumb message",
+                "timestamp": ANY,
+                "type": "default",
+            }
+        ]
 
     def test_activate_deactivate(self, container_factory, service_cls, config):
 
         container = container_factory(service_cls, config)
         container.start()
 
-        with ServiceRpcProxy('service', config) as rpc_proxy:
+        with ServiceRpcProxy("service", config) as rpc_proxy:
             with pytest.raises(RemoteError):
                 rpc_proxy.activate_deactivate("a", "b", "c")
 
@@ -831,36 +766,37 @@ class TestBreadcrumbs(object):
 
         _, kwargs = sentry.client.send.call_args
         breadcrumbs = [
-            crumb for crumb in kwargs['breadcrumbs']['values']
-            if crumb['category'] == "worker"
+            crumb
+            for crumb in kwargs["breadcrumbs"]["values"]
+            if crumb["category"] == "worker"
         ]
 
-        assert breadcrumbs == [{
-            'category': "worker",
-            'data': None,
-            'level': ANY,
-            'message': 'a',
-            'timestamp': ANY,
-            'type': 'default'
-        }, {
-            'category': "worker",
-            'data': None,
-            'level': ANY,
-            'message': 'c',
-            'timestamp': ANY,
-            'type': 'default'
-        }]
+        assert breadcrumbs == [
+            {
+                "category": "worker",
+                "data": None,
+                "level": ANY,
+                "message": "a",
+                "timestamp": ANY,
+                "type": "default",
+            },
+            {
+                "category": "worker",
+                "data": None,
+                "level": ANY,
+                "message": "c",
+                "timestamp": ANY,
+                "type": "default",
+            },
+        ]
 
-    def test_concurrency(
-        self, container_factory, config, web_session
-    ):
-
+    def test_concurrency(self, container_factory, config, web_session):
         class Service(object):
             name = "service"
 
             sentry = SentryReporter()
 
-            @http('GET', '/resource')
+            @http("GET", "/resource")
             def resource(self, request):
                 breadcrumbs.record(message=request.query_string)
                 raise CustomException()
@@ -874,54 +810,51 @@ class TestBreadcrumbs(object):
             called()
             return called.call_count == 2
 
-        with entrypoint_waiter(container, 'resource', callback=called_twice):
-            eventlet.spawn(web_session.get, '/resource?q1')
-            eventlet.spawn(web_session.get, '/resource?q2')
+        with entrypoint_waiter(container, "resource", callback=called_twice):
+            eventlet.spawn(web_session.get, "/resource?q1")
+            eventlet.spawn(web_session.get, "/resource?q2")
 
         sentry = get_extension(container, SentryReporter)
 
         assert sentry.client.send.call_count == 2
 
         breadcrumbs_map = {
-            kwargs['request']['query_string']: kwargs['breadcrumbs']['values']
+            kwargs["request"]["query_string"]: kwargs["breadcrumbs"]["values"]
             for (_, kwargs) in sentry.client.send.call_args_list
         }
 
         expected_crumb_q1 = {
-            'category': None,
-            'data': None,
-            'level': ANY,
-            'message': 'q1'.encode('utf-8'),
-            'timestamp': ANY,
-            'type': 'default'
+            "category": None,
+            "data": None,
+            "level": ANY,
+            "message": "q1".encode("utf-8"),
+            "timestamp": ANY,
+            "type": "default",
         }
-        assert expected_crumb_q1 in breadcrumbs_map['q1']
-        assert expected_crumb_q1 not in breadcrumbs_map['q2']
+        assert expected_crumb_q1 in breadcrumbs_map["q1"]
+        assert expected_crumb_q1 not in breadcrumbs_map["q2"]
 
         expected_crumb_q2 = {
-            'category': None,
-            'data': None,
-            'level': ANY,
-            'message': 'q2'.encode('utf-8'),
-            'timestamp': ANY,
-            'type': 'default'
+            "category": None,
+            "data": None,
+            "level": ANY,
+            "message": "q2".encode("utf-8"),
+            "timestamp": ANY,
+            "type": "default",
         }
-        assert expected_crumb_q2 in breadcrumbs_map['q2']
-        assert expected_crumb_q2 not in breadcrumbs_map['q1']
+        assert expected_crumb_q2 in breadcrumbs_map["q2"]
+        assert expected_crumb_q2 not in breadcrumbs_map["q1"]
 
 
-@pytest.mark.usefixtures('patched_sentry')
+@pytest.mark.usefixtures("patched_sentry")
 class TestReleaseMemory(object):
-
     @pytest.fixture
     def log(self):
         return logging.getLogger("test")
 
     @pytest.fixture
     def service_cls(self, log):
-
         class Unsafe(DependencyProvider):
-
             def get_dependency(self, worker_ctx):
                 return worker_ctx.container._worker_threads[worker_ctx]
 
@@ -946,20 +879,19 @@ class TestReleaseMemory(object):
         container.start()
 
         gc.collect()
-        count_before = objgraph.count('raven.breadcrumbs.BreadcrumbBuffer')
+        count_before = objgraph.count("raven.breadcrumbs.BreadcrumbBuffer")
 
-        with entrypoint_hook(container, 'broken') as hook:
+        with entrypoint_hook(container, "broken") as hook:
             for _ in range(5):
                 with pytest.raises(CustomException):
                     hook()
 
         gc.collect()
-        count_after = objgraph.count('raven.breadcrumbs.BreadcrumbBuffer')
+        count_after = objgraph.count("raven.breadcrumbs.BreadcrumbBuffer")
         assert count_before == count_after
 
 
 class TestEndToEnd(object):
-
     @pytest.fixture
     def tracker(self):
         return Mock()
@@ -967,14 +899,14 @@ class TestEndToEnd(object):
     @pytest.fixture
     def free_port(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('127.0.0.1', 0))
+        sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
         sock.close()
         return port
 
     @pytest.fixture
     def sentry_dsn(self, free_port):
-        return 'eventlet+http://user:pass@127.0.0.1:{}/1'.format(free_port)
+        return "eventlet+http://user:pass@127.0.0.1:{}/1".format(free_port)
 
     @pytest.fixture
     def sentry_stub(self, container_factory, sentry_dsn, tracker):
@@ -984,15 +916,13 @@ class TestEndToEnd(object):
         class SentryStub(object):
             name = "sentry"
 
-            @http('POST', "/api/1/store/")
+            @http("POST", "/api/1/store/")
             def report(self, request):
                 tracker(request.get_data())
                 return 200, "OK"
 
         address = parse.urlparse(sentry_dsn).netloc.split("@")[-1]
-        config = {
-            'WEB_SERVER_ADDRESS': address
-        }
+        config = {"WEB_SERVER_ADDRESS": address}
 
         container = container_factory(SentryStub, config)
         container.start()
@@ -1000,17 +930,16 @@ class TestEndToEnd(object):
         return container
 
     def test_end_to_end(
-        self, container_factory, service_cls, config, sentry_dsn, sentry_stub,
-        tracker
+        self, container_factory, service_cls, config, sentry_dsn, sentry_stub, tracker
     ):
-        config['SENTRY']['DSN'] = sentry_dsn
+        config["SENTRY"]["DSN"] = sentry_dsn
 
         container = container_factory(service_cls, config)
         container.start()
 
-        with entrypoint_waiter(sentry_stub, 'report'):
-            with entrypoint_hook(container, 'broken') as broken:
-                with entrypoint_waiter(container, 'broken'):
+        with entrypoint_waiter(sentry_stub, "report"):
+            with entrypoint_hook(container, "broken") as broken:
+                with entrypoint_waiter(container, "broken"):
                     with pytest.raises(CustomException):
                         broken()
 

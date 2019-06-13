@@ -1,10 +1,7 @@
-test: flake8 pylint pytest
+test: static pytest
 
-flake8:
-	flake8 nameko_sentry.py test_nameko_sentry.py
-
-pylint:
-	pylint nameko_sentry -E
+static:
+	pre-commit run --all-files
 
 pytest:
 	coverage run --concurrency=eventlet --source nameko_sentry.py --branch -m pytest test_nameko_sentry.py
